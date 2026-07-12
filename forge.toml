@@ -1,0 +1,5 @@
+[guardrails]
+allow = ["bash(cd /Users/williambeard/workspace/openscad-agent && cp king_totoro_004.scad king_totoro_005.scad)", "bash(cd /Users/williambeard/workspace/openscad-agent && .claude/skills/preview-scad/scripts/render-scad.sh king_totoro_005.scad --output king_totoro_005.png)", "bash(cd /Users/williambeard/workspace/openscad-agent && ls -la king_totoro_005.png)", """
+bash(cd /Users/williambeard/workspace/openscad-agent && .claude/skills/preview-scad/scripts/render-scad.sh king_totoro_005.scad --output /tmp/totoro5_front.png --camera 0,0,40,70,0,20,220 --size 900x700
+.claude/skills/preview-scad/scripts/render-scad.sh king_totoro_004.scad --output /tmp/totoro4_front.png --camera 0,0,40,70,0,20,220 --size 900x700)"""]
+deny = []

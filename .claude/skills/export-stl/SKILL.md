@@ -1,19 +1,20 @@
 ---
 name: export-stl
-description: Export OpenSCAD (.scad) files to STL format with geometry validation. Checks for non-manifold geometry, self-intersections, and other printability issues.
+description: Export OpenSCAD (.scad) files to STL format with hard geometry validation gates (trimesh + prusa-slicer). Fails on non-watertight meshes, non-manifold edges, open edges, and bounding-box drift.
 allowed-tools:
   - Bash(*/export-stl.sh*)
+  - Bash(*/validate-stl.py*)
   - Read
 ---
 
 # Export STL Skill
 
-Convert OpenSCAD files to STL format for 3D printing with automatic geometry validation.
+Convert OpenSCAD files to STL for 3D printing, then run hard printability gates. Uses the Manifold backend automatically.
 
 ## When to Use
 
 Use this skill after:
-1. The design has been iterated and looks correct in PNG previews
+1. The design passed the multi-view rubric critique in previews
 2. You're ready to export for 3D printing
 
 ## Usage
@@ -25,56 +26,57 @@ Use this skill after:
 ### Options
 
 - `--output <path>` - Custom output path (default: `<input>.stl`)
-- `--binary` - Export binary STL (smaller file, default)
-- `--ascii` - Export ASCII STL (human-readable)
+- `--expect-size <X,Y,Z>` - Expected outer bounding box in mm; **always pass this for functional parts** so dimension drift is caught
+- `--tolerance <mm>` - Allowed bbox deviation per axis (default 0.5)
+- `--allow-multi-part` - Don't fail on disconnected parts (for intentionally multi-piece exports)
+- `--no-validate` - Skip gates (debugging only)
+- `--binary` / `--ascii` - STL format (binary default)
 
-## Geometry Validation
+### Exit Codes
 
-During export, the script checks for common printability issues:
+- `0` - exported and all gates passed
+- `1` - export failed (compile/render error; the exact `ERROR:` lines are printed)
+- `2` - exported but validation gates **FAILED** — read the `FAIL:` lines, fix the .scad source, re-export (max 3 attempts, then rethink the failing feature)
 
-- **Non-manifold geometry** - Mesh has holes or edges shared by more than 2 faces
-- **Self-intersecting geometry** - Parts of the model overlap incorrectly
-- **Degenerate faces** - Zero-area triangles that can cause slicer issues
+## Validation Gates
 
-If issues are detected, the export still completes but warnings are shown with guidance on how to fix them.
+After export, `validate-stl.py` runs two independent checkers:
+
+**trimesh** (hard gates):
+- watertight (no open edges / holes in the surface)
+- no non-manifold edges (edge shared by >2 faces)
+- consistent face winding, positive volume
+- single connected part (unless `--allow-multi-part`)
+- bounding box within `--tolerance` of `--expect-size`
+
+**prusa-slicer --info** (cross-check): `manifold = yes`, open edges, bbox, volume.
+
+Warnings (degenerate faces, missing optional tools) do not fail the gate.
 
 ## Example
 
-After `phone_stand_003.scad` looks good in preview:
-
 ```bash
-.claude/skills/export-stl/scripts/export-stl.sh phone_stand_003.scad
+.claude/skills/export-stl/scripts/export-stl.sh enclosure_003.scad --expect-size 56,36,14
 ```
 
-Output:
 ```
---- Geometry Validation ---
-STATUS: PASSED - No geometry issues detected
-- Mesh appears manifold (watertight)
-- No self-intersections found
-- Ready for slicing
-```
-
-## Workflow Integration
-
-```
-/openscad → /preview-scad → /export-stl
-                              ↓
-                     Geometry validation
-                              ↓
-                     Ready for slicer
+--- trimesh ---
+watertight          = True
+...
+VALIDATION: PASS — mesh is watertight, manifold, and within tolerance
+RESULT: Export successful — all gates passed
 ```
 
-## Fixing Common Issues
+## Fixing Common Gate Failures
 
-If validation reports problems:
-
-- **Non-manifold**: Ensure all shapes are closed solids, avoid 2D shapes in 3D context
-- **Self-intersect**: Use `union()` to properly combine overlapping shapes
-- **Degenerate**: Check for very thin features, increase `$fn` for curves
+- **NOT watertight / open edges** — a shape isn't a closed solid (2D primitive in 3D context, unclosed polyhedron)
+- **Non-manifold edges** — shapes touching at exactly one edge or face: overlap them by ≥0.01 mm and `union()` (BOSL2: `attach(..., inside=true, shiftout=0.01)`)
+- **Inconsistent winding / negative volume** — inverted geometry, often from negative `scale()` or hand-built polyhedra
+- **bbox out of tolerance** — a dimension parameter is wrong, or walls/roundings changed the outer size; compare the reported bbox against your parameters
+- **Multiple parts** — floating geometry that touches nothing; connect it or export it as its own model
 
 ## Notes
 
+- The validator can be run standalone on any STL: `python3 .claude/skills/export-stl/scripts/validate-stl.py file.stl --expect-size X,Y,Z`
+- Requires `trimesh` (pip) and PrusaSlicer (both installed); each check degrades to a warning if its tool is missing
 - Binary STL is recommended (smaller files, faster to process)
-- The export performs a full render, so complex models may take time
-- Triangle count is reported for estimating slice complexity

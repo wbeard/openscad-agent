@@ -8,7 +8,7 @@ allowed-tools:
 
 # OpenSCAD Preview Skill
 
-Render OpenSCAD files to PNG images so you can visually verify your work.
+Render OpenSCAD files to PNG images so you can visually verify your work. Uses the Manifold backend automatically (fast full renders).
 
 ## Usage
 
@@ -18,57 +18,47 @@ Render OpenSCAD files to PNG images so you can visually verify your work.
 
 ## Workflow
 
-1. After creating or editing a `.scad` file, run this skill to render a preview
-2. Read the generated PNG image to visually inspect the result
-3. If the result doesn't look right, fix the code and re-render
-4. Repeat until the design matches the requirements
-
-## Running the Render Script
+1. After creating or editing a `.scad` file, render it — use multi-view for any design decision:
 
 ```bash
-.claude/skills/preview-scad/scripts/render-scad.sh <input.scad> [options]
+.claude/skills/preview-scad/scripts/render-scad.sh <input.scad> --views std
 ```
+
+2. Read **all** generated PNGs (`<base>_iso.png`, `_front.png`, `_right.png`, `_top.png`)
+3. Critique against the rubric below
+4. If anything fails, fix the code and re-render
+5. If the script prints `COMPILE/GEOMETRY ERROR`, read the exact error text, fix that cause, and retry (max 3 attempts before rethinking the approach)
 
 ### Options
 
-- `--output <path>` - Custom output path (default: `<input>_preview.png`)
+- `--views <list>` - `std` (= iso,front,right,top) or comma list of `iso,front,right,top,back,left,bottom`; outputs `<base>_<view>.png` per view, implies full `--render`
+- `--output <path>` - Custom output path (default: `<input>.png`)
 - `--size <WxH>` - Image dimensions (default: `800x600`)
-- `--camera <x,y,z,tx,ty,tz,d>` - Camera position (default: auto-center)
+- `--camera <x,y,z,rx,ry,rz,d>` - Custom camera position (single-view only)
 - `--colorscheme <name>` - Color scheme (default: `Cornfield`)
-- `--render` - Full render mode (slower, more accurate)
-- `--preview` - Preview mode (faster, default)
+- `--render` - Full render mode (accurate)
+- `--preview` - Preview mode (fast; default for single view)
 
-## Example
+A single fast preview (`render-scad.sh file.scad`) is fine for a quick mid-iteration shape check; always do a `--views std` pass before exporting.
 
-After creating `phone_stand.scad`:
+## Critique Rubric
 
-```bash
-.claude/skills/preview-scad/scripts/render-scad.sh phone_stand.scad
-```
+For each render pass, explicitly answer:
 
-Then read the generated `phone_stand_preview.png` to see the result.
-
-## Visual Feedback Loop
-
-When working on OpenSCAD designs:
-
-1. Write/edit the .scad file
-2. Render preview with this skill
-3. Read the PNG image to see what was created
-4. Evaluate: Does it match what the user asked for?
-   - If yes: You're done
-   - If no: Identify what's wrong, fix the code, and repeat from step 2
-
-This iterative process helps ensure the final design meets requirements.
+1. **Completeness** — every feature from the spec visible in at least one view?
+2. **Proportions** — relative sizes match the stated dimensions?
+3. **Placement** — features in the right position/orientation? (top view catches XY offsets; front/right catch Z errors)
+4. **Printability** — overhangs >45°, floating geometry, walls under 0.8 mm, accidentally fused features?
+5. **Regression** — anything worse than the previous version's renders?
 
 ## Next Steps
 
-Once the preview looks correct:
+Once the rubric passes:
 
-1. **Export to STL**: Use `/export-stl` to convert to printable format with geometry validation
+1. **Export to STL**: Use `/export-stl` — it runs hard geometry gates (trimesh + prusa-slicer)
 
 ## Full Pipeline
 
 ```
-/openscad → /preview-scad → /export-stl (with validation)
+/openscad → /preview-scad (--views std + rubric) → /export-stl (validation gates)
 ```
