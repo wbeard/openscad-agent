@@ -43,7 +43,13 @@ Before writing geometry for a functional part:
 
 BOSL2 is installed in the OpenSCAD library path. **Read `references/bosl2-cheatsheet.md` (in this skill directory) before writing BOSL2 code** — it contains the API subset that matters, the gotchas, and compile-verified idiomatic examples.
 
-Reach for BOSL2 whenever a part needs rounded/chamfered edges, screw holes or threads, anchored feature placement (`attach`/`position` instead of coordinate math), repeated features (`grid_copies`, `zrot_copies`), enclosures, hinges, or gears. Plain OpenSCAD primitives remain fine for trivial single-primitive parts.
+Reach for BOSL2 whenever a part needs rounded/chamfered edges, screw holes or threads, anchored feature placement (`attach`/`position` instead of coordinate math), repeated features (`grid_copies`, `zrot_copies`), enclosures, hinges, or gears. Plain OpenSCAD primitives remain fine for trivial single-primitive parts. (For demanding mechanical parts, consider the `/build123d` skill instead — exact B-rep fillets/shells and toleranced STL.)
+
+For BOSL2 API questions beyond the cheat-sheet, search the local docs instead of guessing:
+
+```bash
+~/.venv-cad3d/bin/python .claude/skills/cad-docs/scripts/docsearch.py "your question" --lib bosl2
+```
 
 ## Workflow
 

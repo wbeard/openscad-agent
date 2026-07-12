@@ -111,7 +111,9 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            echo "Usage: render-scad.sh <input.scad> [options]"
+            echo "Usage: render-scad.sh <input.scad|input.stl> [options]"
+            echo ""
+            echo "STL inputs are wrapped in an auto-generated <stem>_view.scad importer."
             echo ""
             echo "Options:"
             echo "  --output <path>       Output PNG path (default: <input>.png)"
@@ -155,6 +157,18 @@ fi
 if [[ ! -f "$INPUT" ]]; then
     echo "Error: Input file not found: $INPUT"
     exit 1
+fi
+
+# Accept STL input directly: wrap it in a one-line OpenSCAD import file
+# (same <stem>_view.scad convention run-cad-py.sh uses)
+if [[ "$INPUT" == *.stl ]]; then
+    STL_STEM="${INPUT%.stl}"
+    WRAPPER="${STL_STEM}_view.scad"
+    echo "import(\"$(basename "$INPUT")\");" > "$WRAPPER"
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="${STL_STEM}.png"
+    fi
+    INPUT="$WRAPPER"
 fi
 
 # Determine output path

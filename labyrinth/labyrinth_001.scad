@@ -55,13 +55,18 @@ mag_pock_d = 6.15; mag_pock_t = 2.25;       // clearance fit + glue
 mag_x     = 34;    mag_dz = 12.5;           // magnets at (+-34, fp_cz +- 12.5)
 notch_w   = 20;                             // finger notch, bottom center
 cham      = 1.2;                            // 45-deg pocket rim lead-in
-// plate-local pass-throughs (yl = case z - fp_cz):
-//   USB pills 7x14 at (-39.2, -1.7) & (-23.5, -1.7)
-//   LED d5 at (+25.4, -1.7); jack d10 at (+38.2, -1.7)
+// MOUNTING CHIRALITY: plates are modeled with the cosmetic FACE at z=0
+// (face-down print). Seating the plate (face outward, yl up) maps
+// plate-local +x -> case -x. Therefore plate-local pass-through x-coords
+// are the NEGATION of the case-coordinate port positions:
+//   USB pills 7x14 at (+39.2, -1.7) & (+23.5, -1.7)   [case x -39.2/-23.5]
+//   LED d5 at (-25.4, -1.7); jack d10 at (-38.2, -1.7) [case x +25.4/+38.2]
 //   magnet pockets d6.15 x 2.25 from the BACK at (+-34, +-12.5), 0.8 front skin
+// Face text/asymmetric art must be MIRRORED in model space to read correctly
+// when mounted (verify via a face-side render).
 
-// port coordinates -- copied from openclaw_case_005.scad (used by the
-// interface modules below)
+// port coordinates -- copied from openclaw_case_005.scad (CASE coords; the
+// interface module below mirrors them into plate-local)
 port_z     = 20.3;   // port centerline height
 usbc_x     = [-39.2, -23.5];
 led_x      = 25.4;
@@ -74,13 +79,16 @@ module rrect2(w, h, r) {
 
 // carrier interface v1 -- matches openclaw_case_005.scad
 module plate_passthroughs() {
-    for (x = usbc_x)
-        hull()
-            for (s = [-1, 1])
-                translate([x, (port_z - fp_cz) + s*(14/2 - 7/2), -1])
-                    cylinder(d = 7, h = fp_t + 2);
-    translate([led_x, port_z - fp_cz, -1])  cylinder(d = 5,  h = fp_t + 2);
-    translate([jack_x, port_z - fp_cz, -1]) cylinder(d = 10, h = fp_t + 2);
+    // mirrored in x: plate-local +x -> case -x when mounted (see contract)
+    mirror([1, 0, 0]) {
+        for (x = usbc_x)
+            hull()
+                for (s = [-1, 1])
+                    translate([x, (port_z - fp_cz) + s*(14/2 - 7/2), -1])
+                        cylinder(d = 7, h = fp_t + 2);
+        translate([led_x, port_z - fp_cz, -1])  cylinder(d = 5,  h = fp_t + 2);
+        translate([jack_x, port_z - fp_cz, -1]) cylinder(d = 10, h = fp_t + 2);
+    }
 }
 
 // carrier interface v1 -- matches openclaw_case_005.scad
@@ -122,11 +130,15 @@ echo(str("ball d", ball_nom, " seat center z=", seat_z_nom,
 
 // ================= maze layout (hand-tuned polylines, plate-local mm) ======
 //
-// Widened port tunnel envelopes (block portion, +1/side):
-//   USB pills d9:  USB1 x -43.7..-34.7, USB2 x -28.0..-19.0, yl -9.7..+6.3
-//   LED d7:  x 21.9..28.9, yl -5.2..+1.8
-//   jack d12: x 32.2..44.2, yl -7.7..+4.3
-// Channel void half-width 3.6; keep >=1.5 to tunnels & magnet pockets,
+// PLATE-LOCAL port positions (mirrored per contract chirality note):
+// widened tunnel envelopes through the block (+1/side):
+//   USB1 pill d9: x 34.7..43.7, USB2 pill d9: x 19.0..28.0, both yl -9.7..+6.3
+//   LED d7:  x -28.9..-21.9, yl -5.2..+1.8
+//   jack d12: x -44.2..-32.2, yl -7.7..+4.3
+// -> clear mid-gap between LED/jack group (left) and USB pair (right) is
+//    x -21.9..+19.0.  When mounted, +x maps to case -x, so the USB pills
+//    sit on the viewer's LEFT: correct.
+// Channel void half-width 3.6; keep >=1.5 to port tunnels & magnet pockets,
 // >=1.4 to everything else. Magnet pocket voids: r3.075 at (+-34, +-12.5).
 //
 // Clearance arithmetic (all gaps are void-edge to void-edge):
@@ -135,28 +147,29 @@ echo(str("ball d", ball_nom, " seat center z=", seat_z_nom,
 //      (at +-27 the gap is only 0.325 -- violates; 45deg corner elbows were
 //       checked and rejected: an elbow from (25.5,12.5) toward the corner
 //       passes ~5.66 from the magnet center < 3.6+3.075+1.5 = 8.175)
-//  * top straight yl +12.5: void bottom 8.9 vs USB tops 6.3 -> gap 2.6
+//  * top straight yl +12.5: void bottom 8.9 vs USB pill tops 6.3 -> gap 2.6
 //  * bottom straight yl -13.5 CANNOT pass under USB2: void top -9.9 vs pill
 //      bottom -9.7 -> 0.2 gap; and no lower lane exists (band between pill
 //      bottom -9.7-1.5 and base-coverage edge -18 is 6.8 < 7.2 channel).
-//      So the bottom straight runs x -13.5..+25.5 (its left end = connector 1)
-//  * bottom straight right end (25.5,-13.5) to magnet (34,-12.5):
+//      So the bottom straight runs x -25.5..+13.5 (its RIGHT end = connector
+//      C1); the bottom-right region under the USB pills stays solid.
+//  * bottom straight left end (-25.5,-13.5) to magnet (-34,-12.5):
 //      sqrt(8.5^2+1^2) - 3.6 - 3.075 = 1.88 >= 1.5
-//  * connector C1 at x -13.5 (spec sketch -15 gives 0.4 -- violates):
-//      void left edge -17.1 vs USB2 right edge -19.0 -> gap 1.9
-//  * connector C2 at x +3: >= 15.3 to everything
-//  * connector C3 at x +16.5 (spec sketch +18 gives 0.3 -- violates):
-//      void right edge 20.1 vs LED left edge 21.9 -> gap 1.8
-//  * trap stub (3,0)->(7.5,-4.5): right edge 11.1 vs C3 void 12.9 -> 1.8;
+//  * connector C1 at x +13.5 (mirror of spec sketch -15, which gives 0.4):
+//      void right edge 17.1 vs USB2 left edge 19.0 -> gap 1.9
+//  * connector C2 at x -3: >= 15 to everything
+//  * connector C3 at x -16.5 (mirror of spec sketch +18, which gives 0.3):
+//      void left edge -20.1 vs LED right edge -21.9 -> gap 1.8
+//  * trap stub (-3,0)->(-7.5,-4.5): left edge -11.1 vs C3 void -12.9 -> 1.8;
 //      bottom edge -8.1 vs bottom-straight void top -9.9 -> 1.8
 //  * base (90x36) ceiling coverage: deepest void edge yl -17.25 (divot),
 //      widest yl +16.1 -- all inside +-18, so every channel has the full
 //      z 7.8..11 lid (0.2 block + 3.0 base) above it
-//  * divot (6.25,-13.5) r3.75, z 0.6..1.3: block edge yl -20 -> wall 2.75
+//  * divot (-6,-13.5) r3.75, z 0.6..1.3: block edge yl -20 -> wall 2.75
 
 pt_TL = [-25.5,  12.5];  pt_TR = [ 25.5,  12.5];   // top straight
-pt_BL = [-13.5, -13.5];  pt_BR = [ 25.5, -13.5];   // bottom straight
-x_c1  = -13.5;  x_c2 = 3;  x_c3 = 16.5;            // connectors
+pt_BL = [-25.5, -13.5];  pt_BR = [ 13.5, -13.5];   // bottom straight
+x_c1  = 13.5;  x_c2 = -3;  x_c3 = -16.5;           // connectors
 
 maze_paths = [
     [pt_TL, pt_TR],                                // top straight
@@ -164,13 +177,13 @@ maze_paths = [
     [[x_c2, 12.5], [x_c2, -13.5]],                 // connector 2
     [[x_c3, 12.5], [x_c3, -13.5]],                 // connector 3
     [pt_BL, pt_BR],                                // bottom straight
-    [[x_c2, 0], [7.5, -4.5]],                      // dead-end trap stub (45deg)
+    [[x_c2, 0], [-7.5, -4.5]],                     // dead-end trap stub (45deg)
 ];
 
-trap_end  = [7.5, -4.5];          // loading hole goes here
-divot_pos = [6.25, -13.5];        // start divot: center of bottom straight
-gate_T_x  = -20;                  // pinch gate on the top straight
-gate_B_x  =  22;                  // pinch gate on the bottom straight
+trap_end  = [-7.5, -4.5];         // loading hole goes here
+divot_pos = [-6, -13.5];          // start divot: center of bottom straight
+gate_T_x  =  20;                  // pinch gate on the top straight
+gate_B_x  = -22;                  // pinch gate on the bottom straight
 
 // ================= channel network modules =================
 
@@ -215,17 +228,20 @@ module gate_bumps(x, yc) {
 }
 
 // widened port tunnels through the block (z 0..8) + 1x45 chamfered mouths
+// (mirrored into plate-local coords, same chirality as plate_passthroughs)
 module block_tunnels() {
-    for (x = usbc_x) {
-        hull() for (s = [-1, 1])
-            translate([x, yl_port + s*3.5, -0.1]) cylinder(d = 9, h = blk_t + 0.11);
-        hull() for (s = [-1, 1])
-            translate([x, yl_port + s*3.5, -0.02]) cylinder(d1 = 11, d2 = 9, h = 1);
+    mirror([1, 0, 0]) {
+        for (x = usbc_x) {
+            hull() for (s = [-1, 1])
+                translate([x, yl_port + s*3.5, -0.1]) cylinder(d = 9, h = blk_t + 0.11);
+            hull() for (s = [-1, 1])
+                translate([x, yl_port + s*3.5, -0.02]) cylinder(d1 = 11, d2 = 9, h = 1);
+        }
+        translate([led_x, yl_port, -0.1])   cylinder(d = 7,  h = blk_t + 0.11);
+        translate([led_x, yl_port, -0.02])  cylinder(d1 = 9,  d2 = 7,  h = 1);
+        translate([jack_x, yl_port, -0.1])  cylinder(d = 12, h = blk_t + 0.11);
+        translate([jack_x, yl_port, -0.02]) cylinder(d1 = 14, d2 = 12, h = 1);
     }
-    translate([led_x, yl_port, -0.1])   cylinder(d = 7,  h = blk_t + 0.11);
-    translate([led_x, yl_port, -0.02])  cylinder(d1 = 9,  d2 = 7,  h = 1);
-    translate([jack_x, yl_port, -0.1])  cylinder(d = 12, h = blk_t + 0.11);
-    translate([jack_x, yl_port, -0.02]) cylinder(d1 = 14, d2 = 12, h = 1);
 }
 
 // ================= the plate =================
@@ -267,12 +283,13 @@ module plug() {
 
 module plate_shown() {
     if (DEBUG_XSEC)
-        // slab x 10.5..12.5 -- clear of divot (ends x 10.0) and C3 (starts
-        // 12.9); shows both straights' profiles: slot, flare, seat, ceiling.
+        // slab x -12.7..-11.3 -- clear of divot (ends -9.75), trap (ends
+        // -11.1) and C3 (starts -12.9); shows both straights' profiles:
+        // slot, flare, ball seat, ceiling.
         rotate([0, -90, 0])
             intersection() {
                 plate();
-                translate([10.5, -25, -1]) cube([2, 50, tot_t + 2]);
+                translate([-12.7, -25, -1]) cube([1.4, 50, tot_t + 2]);
             }
     else
         plate();

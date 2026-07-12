@@ -1,19 +1,46 @@
 # OpenSCAD Agent
 
-This project provides Claude Code skills for creating, iterating, and validating OpenSCAD 3D models for 3D printing.
+This project provides Claude Code skills for creating, iterating, and validating 3D printable models across three CAD backends.
+
+## Backend Decision Guide (pick first, before writing code)
+
+| Shape class | Backend | Skill |
+|-------------|---------|-------|
+| Mechanical/functional parts: enclosures, brackets, fixtures, anything with fillets/shells/counterbores/tolerances | **build123d** (preferred) | `/build123d` |
+| Quick simple parametric parts, or when a .scad file is the deliverable | OpenSCAD + BOSL2 | `/openscad` |
+| Smooth organic-but-**parametric**: vases, grips, blended sculptural forms | **sdf** | `/sdf-shapes` |
+| Figurines, creatures, faces, freeform sculpture — from text or a photo; anything no code can author | **generative 3D** | `/mesh3d` |
+| Flat 2D outlines extruded to 3D | SVG workflow | `/openscad` (SVG section) |
+| Legacy: swept ribbons/metaballs | Blender Python | `/openscad` (Blender section) |
+
+The `/mesh3d` ↔ code-CAD boundary is hard: generative meshes cannot hold a
+dimension, so anything with a tolerance or mating face goes to code-CAD even
+if it "looks organic" — and code-CAD cannot author a face or drapery, so
+sculpture goes to `/mesh3d` even if the user mentions millimeters (that's the
+print height, not a tolerance).
+
+Every backend feeds the same loop: **multi-view render → rubric critique → validation gates**.
 
 ## Complete Workflow
 
-The skills form a pipeline from idea to print-ready model:
-
 ```
-1. /openscad     →  Create versioned .scad files (BOSL2 + $fa=1;$fs=0.4 defaults)
+1. Write model source (.scad via /openscad, or .py via /build123d //sdf-shapes)
 2. /preview-scad →  Multi-view render (--views std), critique against the rubric
-3. /export-stl   →  STL export + hard gates (trimesh + prusa-slicer: watertight,
-                    manifold, bbox-vs-spec). Exit 2 = fix source and retry (max 3)
+                    (Python backends: render the auto-generated <name>_view.scad)
+3. Validate      →  /export-stl for .scad; validate-stl.py directly for Python-
+                    produced STLs. Hard gates: watertight, manifold, open edges,
+                    bbox-vs-spec. Exit 2 = fix source and retry (max 3)
 ```
 
-All scripts use OpenSCAD's Manifold backend automatically — full renders and high facet counts are fast.
+All OpenSCAD scripts use the Manifold backend automatically — full renders and high facet counts are fast.
+
+## Documentation Search (use it — don't guess APIs)
+
+Before using an unfamiliar BOSL2/build123d/sdf API, or after any API error:
+
+```bash
+~/.venv-cad3d/bin/python .claude/skills/cad-docs/scripts/docsearch.py "query" --lib bosl2|build123d|sdf
+```
 
 ## Quality Defaults
 
@@ -23,6 +50,26 @@ All scripts use OpenSCAD's Manifold backend automatically — full renders and h
 - On any compile/geometry error or gate failure: read the exact error, fix that cause, retry — at most 3 attempts before rebuilding the failing feature differently.
 
 ## Available Skills
+
+### `/build123d` - Mechanical Parts (B-rep CAD, preferred for functional parts)
+
+Write build123d Python scripts (`<name>_<ver>.py`) run via `run-cad-py.sh` in the `~/.venv-cad3d` venv. Real fillets/chamfers/shells/counterbores; STL smoothness is one `export_stl(tolerance=0.01)` knob. Read `.claude/skills/build123d/references/build123d-cheatsheet.md` first.
+
+### `/sdf-shapes` - Organic Forms (signed distance fields)
+
+fogleman/sdf scripts with smooth-blended booleans (`.k(mm)`), shells, twists, bends. Resolution = `samples` parameter. Read `.claude/skills/sdf-shapes/references/sdf-cheatsheet.md` first. Always `verbose=False` in `.save()`.
+
+### `/mesh3d` - Generative 3D (text/image → STL)
+
+Text → conditioning image (templated for reconstruction, not aesthetics) →
+GPU shape server (HTTP, `MESH3D_SHAPE_ENDPOINT`) → Blender voxel-remesh print
+prep → suite gates. Iterate on the *image* (cheap), not the mesh (GPU
+dollars); classify every defect as IMAGE / SHAPE / PREP before acting — see
+`.claude/skills/mesh3d/references/failure-modes.md`.
+
+### `/cad-docs` - Local Documentation Search
+
+BM25 over BOSL2 wiki + build123d docs + sdf README in `~/.cad-docs`. Query before writing unfamiliar API calls and after API errors.
 
 ### `/openscad` - Create Versioned 3D Models
 
